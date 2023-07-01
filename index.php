@@ -1,4 +1,21 @@
+<?php 
+require_once 'Dal/DataManager.php';
+require_once 'Dal/DBManager.php';
+require_once 'Services/TimeZoneService.php';
+use Dal\DBManager;
+use Dal\DataManager;
+use Services\TimeZoneService;
+$dbManager = new DBManager;
+$filteredCustomerID = $_GET['customer']  ?? 0;
+$filteredProductID = $_GET['product'] ?? 0;
+$filteredPrice = $_GET['price'] ?? -1;
 
+$filter = array_merge( 
+    ($filteredCustomerID != 0 && $filteredCustomerID != '' ? ['customer_id' => $filteredCustomerID] : []),
+    ($filteredProductID != 0  && $filteredProductID != '' ? ['product_id' => $filteredProductID] : []),
+    ( $filteredPrice != -1   && $filteredPrice != '' ? ['price' => $filteredPrice] : [] )
+);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,9 +38,188 @@
 </svg>
 
     <div class="container">
+        <?php
+        if( !$dbManager->loadCredentials() ){
+        ?>
+            <div class="row justify-content-center align-items-center g-2">
+                <div class="col">
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <svg class="bi flex-shrink-0 me-2" width="24" height="24" role="img" aria-label="Danger:"><use xlink:href="#exclamation-triangle-fill"/></svg>
+                        <div>
+                            Database credentials problem. Please check the config.json file to make sure database credentials are OK.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php
+        }
+        
+        
+        if( !$dbManager->connect() ){
+        ?>
+            <div class="row justify-content-center align-items-center g-2">
+                <div class="col">
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <svg class="bi flex-shrink-0 me-2" width="24" height="24" role="img" aria-label="Danger:"><use xlink:href="#exclamation-triangle-fill"/></svg>
+                        <div>
+                            Couldn't connect to database. Please check the credentials.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php
+        }
+
+        if( !$dbManager->createSchema() ){
+        ?>
+            <div class="row justify-content-center align-items-center g-2">
+                <div class="col">
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <svg class="bi flex-shrink-0 me-2" width="24" height="24" role="img" aria-label="Danger:"><use xlink:href="#exclamation-triangle-fill"/></svg>
+                        <div>
+                            Couldn't create tables.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php
+        }
+        ?>
+        <?php
+        $dataManager = new DataManager( $dbManager->getConn() );
+        $dataManager->loadData();
+        $customers = $dataManager->getCustomers();
+        $products = $dataManager->getProducts();
+        $prices = $dataManager->getPrices();
+        $sales = $dataManager->getSales($filter);
+        ?>
+        <div class="card mt-5">
+            
+            <div class="card-body">
+                <div class="row justify-content-center align-items-center g-2">
+                    <div class="col">
+                        <form action="" method="get">
+                            <select class="form-select" name="product" select-type='filter'>
+                                <option value="">Filter by product</option>
+                                <?php 
+                                    foreach ($products as $product) {
+                                        # code...
+                                        ?>
+                                        <option <?php echo $filteredProductID== $product->id ? 'selected' : '' ?>  value="<?php echo $product->id; ?>"><?php echo $product->name; ?></option>
+                                        <?php
+                                    }
+                                ?>
+                                
+                            </select>
+                        </form>
+                    </div>
+                    <div class="col">
+                        <form action="" method="get">
+                            <select class="form-select" name="customer" select-type='filter'>
+                                <option value="">Filter by customer</option>
+                                <?php 
+                                    foreach ($customers as $customer) {
+                                        # code...
+                                        ?>
+                                        <option <?php echo $filteredCustomerID == $customer->id ? 'selected' : '' ?>  value="<?php echo $customer->id; ?>"><?php echo $customer->name; ?></option>
+                                        <?php
+                                    }
+                                ?>
+                                
+                            </select>
+                        </form>
+                    </div>
+                    
+                    <div class="col">
+                        <form action="" method="get">
+                            <select class="form-select" name="price" select-type='filter'>
+                                <option value="">Filter by price</option>
+                                <?php 
+                                    foreach ($prices as $price) {
+                                        # code...
+                                        ?>
+                                        <option <?php echo $filteredPrice == $price->price ? 'selected' : '' ?>  value="<?php echo $price->price; ?>"><?php echo $price->price; ?></option>
+                                        <?php
+                                    }
+                                ?>
+                                
+                            </select>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+
+        <div class="card mt-2">
+            
+            <div class="card-body">
+                <div class="row justify-content-center align-items-center g-2">
+                    <div class="col">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">#</th>
+                                    <th scope="col">Product</th>
+                                    <th scope="col">Price</th>
+                                    <th scope="col">Customer</th>
+                                    <th scope="col">Version</th>
+                                    <th scope="col">Sale Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $serial = 1;
+                                $totalPrice = 0;
+                                foreach ($sales as $sale) {
+                                    # code...
+                                    ?>
+                                    <tr>
+                                        <th scope="row"><?php echo $serial; ?></th>
+                                        <td>
+                                            <?php 
+                                                $product = $dataManager->getProductById(  $sale->product_id);
+                                                echo $product ? $product->name : '';
+                                            ?>
+                                        </td>
+                                        <td><?php echo $sale->price; ?></td>
+                                        <td>
+                                            <?php 
+                                                $customer = $dataManager->getCustomerById( $sale->customer_id);
+                                                echo $customer ? $customer->name : '';
+                                            ?>
+                                        </td>
+                                        <td><?php echo $sale->version; ?></td>
+                                        <td><?php echo $sale->created_at.' ('. TimeZoneService::getTimeZone( $sale->version  ) .')'; ?> </td>
+                                    </tr>
+                                    <?php
+                                    $serial++;
+                                    $totalPrice += $sale->price;
+                                }
+                                ?>
+                                
+                                
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="2" scope="col">Total</th>
+                                    <th scope="col"><?php echo $totalPrice; ?></th>
+                                    <th scope="col">&nbsp;</th>
+                                    <th scope="col">&nbsp;</th>
+                                    <th scope="col">&nbsp;</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         
     </div>
+
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
+    <script src="./assets/js/app.js"></script>
 </body>
 </html>
